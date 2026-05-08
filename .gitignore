@@ -1,0 +1,28 @@
+# Aftman
+/.aftman/
+
+# Build artifacts
+/build/*.rbxlx
+/build/*.rbxl
+/build/*.rbxmx
+
+# Lune
+/.lune/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Editor
+.vscode/
+.idea/
+
+# Sourcemap
+sourcemap.json
+
+# Local secret cache (in case lune scripts cache anything)
+.env
+.env.local
