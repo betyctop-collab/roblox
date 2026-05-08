@@ -179,14 +179,13 @@ end
 local results: { [string]: string } = {}
 for _, file in files do
 	local key = string.sub(file, 1, -5)
-	io.write(string.format("[%s] uploading... ", key))
 	local bytes = readFileBytes(iconDir .. "/" .. file)
 	local assetId = uploadOne(key, file, bytes)
 	if assetId then
-		print("ok = " .. assetId)
+		print(string.format("[%s] ok = %s", key, assetId))
 		results[key] = assetId
 	else
-		print("FAILED")
+		print(string.format("[%s] FAILED", key))
 	end
 end
 
