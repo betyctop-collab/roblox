@@ -1769,7 +1769,6 @@ function HUD.new(player: Player)
 	}) :: ScreenGui
 	self._screen = screen
 
-	self:_buildBackground(screen)
 	self:_buildStatsCard(screen)
 	self:_buildAnnouncementRibbon(screen)
 	self:_buildSideButtons(screen)
@@ -1829,27 +1828,6 @@ function HUD.new(player: Player)
 	end)
 
 	return self
-end
-
--- ============================================================================
--- Background
--- ============================================================================
-
-function HUD:_buildBackground(screen: ScreenGui)
-	local bg = new(screen, "Frame", {
-		Name = "Background",
-		BackgroundColor3 = Theme.Colors.Background,
-		BorderSizePixel = 0,
-		Size = UDim2.fromScale(1, 1),
-		ZIndex = 0,
-	}) :: Frame
-	local gradient = Instance.new("UIGradient")
-	gradient.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(11, 17, 28)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(33, 14, 50)),
-	})
-	gradient.Rotation = 110
-	gradient.Parent = bg
 end
 
 -- ============================================================================
