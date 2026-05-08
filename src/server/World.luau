@@ -54,7 +54,7 @@ local function bareMinimum(folder: Folder)
 		Size = Vector3.new(420, 2, 420),
 		Position = Vector3.new(0, -1, 0),
 		Material = Enum.Material.Slate,
-		Color = Color3.fromRGB(22, 28, 44),
+		Color = Color3.fromRGB(118, 128, 158),
 	})
 
 	-- Wipe any pre-existing SpawnLocation so we own the position.
@@ -80,7 +80,7 @@ local function buildStage(folder: Folder)
 		Size = Vector3.new(STAGE_RADIUS * 2, 1, STAGE_RADIUS * 2),
 		Position = Vector3.new(0, 0.5, 0),
 		Material = Enum.Material.Marble,
-		Color = Color3.fromRGB(40, 50, 76),
+		Color = Color3.fromRGB(170, 180, 210),
 	})
 
 	-- Glowing seam ring around the dais
@@ -109,7 +109,7 @@ local function buildStage(folder: Folder)
 			Size = Vector3.new(size, 0.4, size),
 			Position = Vector3.new(x, 0.2, z),
 			Material = Enum.Material.Slate,
-			Color = Color3.fromRGB(20, 26, 42),
+			Color = Color3.fromRGB(140, 150, 178),
 			Orientation = Vector3.new(0, math.random(0, 360), 0),
 			CanCollide = false,
 		})
@@ -125,13 +125,13 @@ local function buildAltar(folder: Folder)
 		Size = Vector3.new(20, 0.6, 20),
 		Position = Vector3.new(0, 1.3, 0),
 		Material = Enum.Material.Marble,
-		Color = Color3.fromRGB(50, 62, 90),
+		Color = Color3.fromRGB(196, 200, 220),
 	})
 	part("AltarStep2", altar, {
 		Size = Vector3.new(14, 0.6, 14),
 		Position = Vector3.new(0, 1.9, 0),
 		Material = Enum.Material.Marble,
-		Color = Color3.fromRGB(60, 72, 104),
+		Color = Color3.fromRGB(214, 218, 232),
 	})
 	part("AltarTop", altar, {
 		Size = Vector3.new(10, 0.4, 10),
@@ -179,13 +179,13 @@ local function buildRarityPillars(folder: Folder)
 			Size = Vector3.new(4, 1.2, 4),
 			Position = Vector3.new(x, 1.6, z),
 			Material = Enum.Material.Marble,
-			Color = Color3.fromRGB(36, 46, 70),
+			Color = Color3.fromRGB(180, 184, 204),
 		})
 		part("Shaft_" .. tier.Key, pillars, {
 			Size = Vector3.new(2.4, 8, 2.4),
 			Position = Vector3.new(x, 6.2, z),
 			Material = Enum.Material.Marble,
-			Color = Color3.fromRGB(44, 56, 86),
+			Color = Color3.fromRGB(212, 216, 232),
 		})
 		local cap = part("Cap_" .. tier.Key, pillars, {
 			Size = Vector3.new(3, 1.6, 3),
@@ -369,19 +369,23 @@ local function buildPetals(folder: Folder)
 end
 
 local function configureLighting()
-	Lighting.Ambient = Color3.fromRGB(80, 86, 116)
-	Lighting.OutdoorAmbient = Color3.fromRGB(110, 110, 140)
-	Lighting.Brightness = 1.6
-	Lighting.ColorShift_Bottom = Color3.fromRGB(20, 22, 42)
-	Lighting.ColorShift_Top = Color3.fromRGB(70, 60, 110)
-	Lighting.EnvironmentDiffuseScale = 0.6
-	Lighting.EnvironmentSpecularScale = 0.4
+	-- Bright daytime so the dojo and pillars are clearly readable. The previous
+	-- pass set ClockTime ~17.7 (sunset) + heavy fog + dark ColorShift_Bottom,
+	-- which combined with dark stone colours made the whole map render black
+	-- from the player's POV (only emissive neon parts were visible).
+	Lighting.Ambient = Color3.fromRGB(140, 144, 156)
+	Lighting.OutdoorAmbient = Color3.fromRGB(180, 186, 200)
+	Lighting.Brightness = 2
+	Lighting.ColorShift_Bottom = Color3.fromRGB(0, 0, 0)
+	Lighting.ColorShift_Top = Color3.fromRGB(0, 0, 0)
+	Lighting.EnvironmentDiffuseScale = 1
+	Lighting.EnvironmentSpecularScale = 1
 	Lighting.GlobalShadows = true
-	Lighting.ClockTime = 17.7
+	Lighting.ClockTime = 14
 	Lighting.GeographicLatitude = 32
-	Lighting.FogColor = Color3.fromRGB(78, 102, 130)
-	Lighting.FogStart = 80
-	Lighting.FogEnd = 380
+	Lighting.FogColor = Color3.fromRGB(180, 200, 220)
+	Lighting.FogStart = 320
+	Lighting.FogEnd = 1200
 
 	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
 	if not atmo then
@@ -389,12 +393,12 @@ local function configureLighting()
 		atmo.Parent = Lighting
 	end
 	if atmo then
-		atmo.Density = 0.32
-		atmo.Offset = 0.1
-		atmo.Color = Color3.fromRGB(180, 188, 220)
-		atmo.Decay = Color3.fromRGB(106, 90, 156)
-		atmo.Glare = 0.3
-		atmo.Haze = 1.6
+		atmo.Density = 0.18
+		atmo.Offset = 0.05
+		atmo.Color = Color3.fromRGB(199, 199, 199)
+		atmo.Decay = Color3.fromRGB(106, 112, 125)
+		atmo.Glare = 0
+		atmo.Haze = 0.6
 	end
 
 	local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
@@ -403,7 +407,7 @@ local function configureLighting()
 		bloom.Parent = Lighting
 	end
 	if bloom then
-		bloom.Intensity = 0.5
+		bloom.Intensity = 0.4
 		bloom.Size = 18
 		bloom.Threshold = 0.95
 	end
@@ -414,8 +418,8 @@ local function configureLighting()
 		rays.Parent = Lighting
 	end
 	if rays then
-		rays.Intensity = 0.18
-		rays.Spread = 0.6
+		rays.Intensity = 0.1
+		rays.Spread = 0.4
 	end
 
 	local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
@@ -424,9 +428,28 @@ local function configureLighting()
 		cc.Parent = Lighting
 	end
 	if cc then
-		cc.Saturation = 0.1
-		cc.Contrast = 0.06
-		cc.TintColor = Color3.fromRGB(240, 230, 250)
+		cc.Saturation = 0
+		cc.Contrast = 0
+		cc.TintColor = Color3.fromRGB(255, 255, 255)
+	end
+
+	-- Make sure a Sky exists. If a previous publish left a darker / custom one,
+	-- reuse it so we don't fight over the place's Lighting tree, but reset its
+	-- properties to a clean default so the horizon renders blue, not black.
+	local sky = Lighting:FindFirstChildOfClass("Sky")
+	if not sky then
+		sky = Instance.new("Sky")
+		sky.Parent = Lighting
+	end
+	if sky then
+		sky.SkyboxBk = "rbxasset://textures/sky/sky512_bk.tex"
+		sky.SkyboxDn = "rbxasset://textures/sky/sky512_dn.tex"
+		sky.SkyboxFt = "rbxasset://textures/sky/sky512_ft.tex"
+		sky.SkyboxLf = "rbxasset://textures/sky/sky512_lf.tex"
+		sky.SkyboxRt = "rbxasset://textures/sky/sky512_rt.tex"
+		sky.SkyboxUp = "rbxasset://textures/sky/sky512_up.tex"
+		sky.CelestialBodiesShown = true
+		sky.StarCount = 3000
 	end
 end
 
