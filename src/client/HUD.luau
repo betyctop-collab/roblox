@@ -375,11 +375,29 @@ function HUD:_buildAnnouncementRibbon(screen: ScreenGui)
 
 	self._announceList = list
 	self._announceCount = 0
+
+	local empty = new(list, "TextLabel", {
+		Name = "EmptyState",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 28),
+		Text = "No drops yet — be the first to roll a Mythic+ blade.",
+		TextColor3 = Theme.Colors.Muted,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Font = Theme.Fonts.Regular,
+		TextSize = 12,
+		LayoutOrder = 9999,
+	}) :: TextLabel
+	self._announceEmpty = empty
 end
 
 function HUD:_pushAnnouncement(payload: any)
 	if not self._announceList then
 		return
+	end
+	if self._announceEmpty then
+		self._announceEmpty.Visible = false
 	end
 	local rarity = Rarities.ByKey[payload.RarityKey] or Rarities.Mythic
 	local row = new(self._announceList, "Frame", {
@@ -662,21 +680,81 @@ function HUD:_buildBottomBar(screen: ScreenGui)
 		TextSize = 11,
 	})
 	hint.TextTransparency = 0.3
+
+	-- Active boost banner (shows while a temporary luck multiplier is live).
+	local pad = Theme.Sizes.HudPadding
+	local boostBanner = new(screen, "Frame", {
+		Name = "BoostBanner",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -(110 + pad + 12)),
+		Size = UDim2.fromOffset(280, 36),
+		BackgroundColor3 = Theme.Colors.SurfaceAlt,
+		BackgroundTransparency = 0.05,
+		BorderSizePixel = 0,
+		Visible = false,
+	}) :: Frame
+	corner(boostBanner, 10)
+	stroke(boostBanner, Theme.Colors.Yellow400, 1, 0.2)
+	padding(boostBanner, 8)
+
+	local boostIcon, _ = makeIcon(boostBanner, "Zap", 18, Theme.Colors.Yellow400)
+	boostIcon.Parent.Position = UDim2.fromOffset(0, 1)
+
+	local boostText = new(boostBanner, "TextLabel", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(26, 0),
+		Size = UDim2.new(1, -26, 1, 0),
+		Text = "",
+		TextColor3 = Theme.Colors.White,
+		Font = Theme.Fonts.Bold,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center,
+	}) :: TextLabel
+	self._boostBanner = boostBanner
+	self._boostText = boostText
 end
 
 function HUD:_redrawTimer()
 	local snap = self._snapshot
-	if not (snap and self._timerLabel) then
+	if not snap then
 		return
 	end
 	-- The server clock and our clock are not synchronized; we received
 	-- ServerNow alongside NextRollAt and use the diff plus our local elapsed
 	-- time to estimate remaining seconds.
-	local delta = math.max(0, snap.NextRollAt - snap.ServerNow)
-	local elapsed = os.clock() - (self._snapshotLocalT or os.clock())
-	local remaining = math.max(0, delta - elapsed)
-	self._timerLabel.Text = string.format("Auto-roll in %.1fs — press SPACE to skip", remaining)
-	self._timerLabel.TextColor3 = remaining < 0.6 and Theme.Colors.Yellow400 or Theme.Colors.Muted
+	local localElapsed = os.clock() - (self._snapshotLocalT or os.clock())
+
+	if self._timerLabel then
+		local delta = math.max(0, snap.NextRollAt - snap.ServerNow)
+		local remaining = math.max(0, delta - localElapsed)
+		self._timerLabel.Text =
+			string.format("Auto-roll in %.1fs — press SPACE to skip", remaining)
+		self._timerLabel.TextColor3 = remaining < 0.6 and Theme.Colors.Yellow400
+			or Theme.Colors.Muted
+	end
+
+	if self._boostBanner and self._boostText then
+		local active = nil
+		local soonestExpiry = math.huge
+		for _, b in snap.Boosts or {} do
+			local remaining = math.max(0, (b.SecondsLeft or 0) - localElapsed)
+			if remaining > 0 and remaining < soonestExpiry then
+				active = b
+				soonestExpiry = remaining
+			end
+		end
+		if active then
+			self._boostBanner.Visible = true
+			self._boostText.Text = string.format(
+				"Luck boost x%d — %.1fs remaining",
+				active.Multiplier or 1,
+				soonestExpiry
+			)
+		else
+			self._boostBanner.Visible = false
+		end
+	end
 end
 
 -- ============================================================================

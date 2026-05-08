@@ -63,9 +63,15 @@ local function multipart(parts: { { [string]: string } }): string
 					part.filename
 				)
 			)
-			table.insert(lines, "Content-Type: " .. (part.contentType or "application/octet-stream"))
+			table.insert(
+				lines,
+				"Content-Type: " .. (part.contentType or "application/octet-stream")
+			)
 		else
-			table.insert(lines, string.format('Content-Disposition: form-data; name="%s"', part.name))
+			table.insert(
+				lines,
+				string.format('Content-Disposition: form-data; name="%s"', part.name)
+			)
 		end
 		table.insert(lines, "")
 		table.insert(lines, part.value)
@@ -160,16 +166,15 @@ local function patchIconIds(map: { [string]: string })
 	local path = "src/shared/IconIds.luau"
 	local source = fs.readFile(path)
 	for key, assetId in pairs(map) do
-		local pattern = "(IconIds%." .. key .. "%s*=%s*)\"\""
-		local replacement = '%1"rbxassetid://' .. assetId .. '"'
+		local replacement = string.format("%%1thumb(%s)", assetId)
+		local pattern = "(IconIds%." .. key .. "%s*=%s*)thumb%(%d+%)"
 		local newSource, n = string.gsub(source, pattern, replacement, 1)
 		if n == 1 then
 			source = newSource
 		else
-			-- Replace whatever value is currently there, even if non-empty,
-			-- so re-runs with newer asset ids work.
-			pattern = "(IconIds%." .. key .. "%s*=%s*)\"[^\"]*\""
-			replacement = '%1"rbxassetid://' .. assetId .. '"'
+			-- Fall back to replacing any string literal so older versions of
+			-- this file (with `rbxassetid://` literals) still get patched.
+			pattern = "(IconIds%." .. key .. '%s*=%s*)"[^"]*"'
 			source = string.gsub(source, pattern, replacement, 1)
 		end
 	end
@@ -193,10 +198,13 @@ for _, entry in entries do
 	end
 end
 patchIconIds(map)
-print(string.format("Patched IconIds.luau with %d entries", (function()
-	local n = 0
-	for _ in pairs(map) do
-		n += 1
-	end
-	return n
-end)()))
+print(string.format(
+	"Patched IconIds.luau with %d entries",
+	(function()
+		local n = 0
+		for _ in pairs(map) do
+			n += 1
+		end
+		return n
+	end)()
+))
