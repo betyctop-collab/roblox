@@ -1,0 +1,40 @@
+{
+  "name": "RobloxRNGKatana",
+  "tree": {
+    "$className": "DataModel",
+    "Workspace": {
+      "$properties": {
+        "Gravity": 196.2,
+        "FilteringEnabled": true
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Ambient": [85, 92, 120],
+        "Brightness": 1.5,
+        "ClockTime": 14.5,
+        "FogColor": [108, 134, 158],
+        "FogEnd": 280,
+        "OutdoorAmbient": [110, 110, 130],
+        "TimeOfDay": "14:30:00"
+      }
+    },
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "Server": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Client": {
+          "$path": "src/client"
+        }
+      }
+    }
+  }
+}
