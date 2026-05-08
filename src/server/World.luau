@@ -4,8 +4,14 @@
 -- decorative blade installations, lighting, atmosphere, and ambient cherry
 -- blossom particles.
 --
--- All builds are idempotent — `Build()` clears any prior `RngWorld` folder
--- before re-creating, so live-syncing via Rojo doesn't pile up duplicates.
+-- The build is split into a guaranteed `bareMinimum()` phase that always
+-- runs first (so the player has *something* to spawn onto, even if anything
+-- else later throws), followed by a series of `pcall`-guarded steps for the
+-- decorative additions. Each step's failure is logged via `warn()` and the
+-- rest still runs.
+--
+-- `Build()` is idempotent — it deletes any prior `RngWorld` folder before
+-- re-creating, so live-syncing via Rojo doesn't pile up duplicates.
 
 local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
@@ -22,7 +28,11 @@ local function part(name: string, parent: Instance?, props: { [string]: any }): 
 	local p = Instance.new("Part")
 	p.Name = name
 	p.Anchored = true
-	p.CanCollide = props.CanCollide ~= false
+	if props.CanCollide == nil then
+		p.CanCollide = true
+	else
+		p.CanCollide = props.CanCollide
+	end
 	p.TopSurface = Enum.SurfaceType.Smooth
 	p.BottomSurface = Enum.SurfaceType.Smooth
 	for k, v in pairs(props) do
@@ -36,8 +46,10 @@ local function part(name: string, parent: Instance?, props: { [string]: any }): 
 	return p
 end
 
-local function buildBase(folder: Folder)
-	-- Outer plate
+local function bareMinimum(folder: Folder)
+	-- The two parts that must exist for the place to be playable: a ground
+	-- plane the player can stand on, and a SpawnLocation. Anything else is
+	-- decoration that we tolerate failing.
 	part("Ground", folder, {
 		Size = Vector3.new(420, 2, 420),
 		Position = Vector3.new(0, -1, 0),
@@ -45,22 +57,30 @@ local function buildBase(folder: Folder)
 		Color = Color3.fromRGB(22, 28, 44),
 	})
 
-	-- Mid plate (raised)
-	local mid = part("Stage", folder, {
+	-- Wipe any pre-existing SpawnLocation so we own the position.
+	local existing = Workspace:FindFirstChild("SpawnLocation")
+	if existing then
+		existing:Destroy()
+	end
+	local spawnPart = Instance.new("SpawnLocation")
+	spawnPart.Name = "SpawnLocation"
+	spawnPart.Size = Vector3.new(8, 1, 8)
+	spawnPart.Position = Vector3.new(0, 1.2, OUTER_RADIUS - 14)
+	spawnPart.Anchored = true
+	spawnPart.Material = Enum.Material.Neon
+	spawnPart.Color = Color3.fromRGB(56, 189, 248)
+	spawnPart.Transparency = 0.15
+	spawnPart.TopSurface = Enum.SurfaceType.Smooth
+	spawnPart.Parent = Workspace
+end
+
+local function buildStage(folder: Folder)
+	-- Mid plate (raised marble platform)
+	part("Stage", folder, {
 		Size = Vector3.new(STAGE_RADIUS * 2, 1, STAGE_RADIUS * 2),
 		Position = Vector3.new(0, 0.5, 0),
 		Material = Enum.Material.Marble,
 		Color = Color3.fromRGB(40, 50, 76),
-		Shape = Enum.PartType.Block,
-	})
-	-- Bevel using a cylinder beneath the stage to suggest a circular dais.
-	part("StageDisc", folder, {
-		Size = Vector3.new(STAGE_RADIUS * 2 + 4, 1, STAGE_RADIUS * 2 + 4),
-		Position = Vector3.new(0, 0.0, 0),
-		Material = Enum.Material.Slate,
-		Color = Color3.fromRGB(28, 36, 60),
-		Shape = Enum.PartType.Cylinder,
-		Orientation = Vector3.new(0, 0, 90),
 	})
 
 	-- Glowing seam ring around the dais
@@ -78,7 +98,7 @@ local function buildBase(folder: Folder)
 		})
 	end
 
-	-- Decorative ground tiles outside the dais (sparse)
+	-- Sparse decorative tiles outside the dais
 	for i = 1, 24 do
 		local angle = math.random() * math.pi * 2
 		local r = STAGE_RADIUS + 8 + math.random() * (OUTER_RADIUS - STAGE_RADIUS - 12)
@@ -94,11 +114,9 @@ local function buildBase(folder: Folder)
 			CanCollide = false,
 		})
 	end
-	mid:GetMass()
 end
 
 local function buildAltar(folder: Folder)
-	-- Three concentric platforms forming a stepped altar at center.
 	local altar = Instance.new("Folder")
 	altar.Name = "Altar"
 	altar.Parent = folder
@@ -122,18 +140,15 @@ local function buildAltar(folder: Folder)
 		Color = Color3.fromRGB(168, 85, 247),
 	})
 
-	-- Center beacon (slim glowing column reaching up)
-	local beacon = part("Beacon", altar, {
+	part("Beacon", altar, {
 		Size = Vector3.new(0.8, 80, 0.8),
 		Position = Vector3.new(0, 42.5, 0),
 		Material = Enum.Material.Neon,
 		Color = Color3.fromRGB(236, 72, 153),
 		Transparency = 0.2,
 		CanCollide = false,
-		CastShadow = false,
 	})
 
-	-- Floating glow ring above the altar
 	for i = 0, 11 do
 		local angle = (i / 12) * math.pi * 2
 		local x = math.cos(angle) * 4
@@ -147,13 +162,9 @@ local function buildAltar(folder: Folder)
 			Orientation = Vector3.new(0, math.deg(-angle), 0),
 		})
 	end
-	beacon:GetMass()
 end
 
 local function buildRarityPillars(folder: Folder)
-	-- One pillar per rarity, arranged in a circle around the altar at the
-	-- edge of the dais. Order is rare→common clockwise so the brightest
-	-- (Celestial) is the first one a player sees on spawn.
 	local pillars = Instance.new("Folder")
 	pillars.Name = "RarityPillars"
 	pillars.Parent = folder
@@ -164,28 +175,24 @@ local function buildRarityPillars(folder: Folder)
 		local x = math.cos(angle) * (STAGE_RADIUS - 5)
 		local z = math.sin(angle) * (STAGE_RADIUS - 5)
 
-		-- Base
 		part("Base_" .. tier.Key, pillars, {
 			Size = Vector3.new(4, 1.2, 4),
 			Position = Vector3.new(x, 1.6, z),
 			Material = Enum.Material.Marble,
 			Color = Color3.fromRGB(36, 46, 70),
 		})
-		-- Shaft
 		part("Shaft_" .. tier.Key, pillars, {
 			Size = Vector3.new(2.4, 8, 2.4),
 			Position = Vector3.new(x, 6.2, z),
 			Material = Enum.Material.Marble,
 			Color = Color3.fromRGB(44, 56, 86),
 		})
-		-- Glowing cap
 		local cap = part("Cap_" .. tier.Key, pillars, {
 			Size = Vector3.new(3, 1.6, 3),
 			Position = Vector3.new(x, 11, z),
 			Material = Enum.Material.Neon,
 			Color = tier.BannerColor,
 		})
-		-- Floating gem above cap
 		part("Gem_" .. tier.Key, pillars, {
 			Size = Vector3.new(1.4, 1.4, 1.4),
 			Position = Vector3.new(x, 13.5, z),
@@ -194,28 +201,25 @@ local function buildRarityPillars(folder: Folder)
 			Color = tier.BannerColor,
 			Transparency = 0.1,
 			CanCollide = false,
-			CastShadow = false,
 		})
-		-- PointLight on the cap
 		local light = Instance.new("PointLight")
 		light.Brightness = 2.5
 		light.Range = 18
 		light.Color = tier.BannerColor
 		light.Parent = cap
 
-		-- Label above the gem
-		local labelPart = part("Label_" .. tier.Key, pillars, {
-			Size = Vector3.new(6, 1.4, 0.05),
-			Position = Vector3.new(x, 15.2, z),
+		local labelAnchor = part("Label_" .. tier.Key, pillars, {
+			Size = Vector3.new(0.4, 0.4, 0.4),
+			Position = Vector3.new(x, 15.6, z),
 			Transparency = 1,
 			CanCollide = false,
-			CastShadow = false,
 		})
-		local sg = Instance.new("SurfaceGui")
-		sg.Face = Enum.NormalId.Front
-		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-		sg.PixelsPerStud = 80
-		sg.Parent = labelPart
+		local bg = Instance.new("BillboardGui")
+		bg.Adornee = labelAnchor
+		bg.Size = UDim2.fromOffset(160, 36)
+		bg.AlwaysOnTop = false
+		bg.LightInfluence = 0
+		bg.Parent = labelAnchor
 		local label = Instance.new("TextLabel")
 		label.BackgroundTransparency = 1
 		label.Size = UDim2.fromScale(1, 1)
@@ -225,13 +229,11 @@ local function buildRarityPillars(folder: Folder)
 		label.TextScaled = true
 		label.TextStrokeTransparency = 0.4
 		label.TextStrokeColor3 = Color3.new(0, 0, 0)
-		label.Parent = sg
+		label.Parent = bg
 	end
 end
 
 local function buildToriiGate(folder: Folder)
-	-- Classic torii: two thick uprights, a top crossbeam ("kasagi"), and a
-	-- secondary beam ("nuki") below it.
 	local gate = Instance.new("Folder")
 	gate.Name = "ToriiGate"
 	gate.Parent = folder
@@ -242,19 +244,15 @@ local function buildToriiGate(folder: Folder)
 	local BEAM_THICK = 1.6
 	local UPRIGHT_THICK = 1.6
 
-	local function torii(offsetX: number)
-		part("Upright_" .. offsetX, gate, {
+	for _, offset in { -SPAN / 2, SPAN / 2 } do
+		part("Upright_" .. tostring(offset), gate, {
 			Size = Vector3.new(UPRIGHT_THICK, UPRIGHT_HEIGHT, UPRIGHT_THICK),
-			Position = Vector3.new(CX + offsetX, UPRIGHT_HEIGHT / 2 + 0.5, CZ),
+			Position = Vector3.new(CX + offset, UPRIGHT_HEIGHT / 2 + 0.5, CZ),
 			Material = Enum.Material.WoodPlanks,
 			Color = Color3.fromRGB(176, 35, 35),
 		})
 	end
 
-	torii(-SPAN / 2)
-	torii(SPAN / 2)
-
-	-- Nuki (lower crossbeam)
 	part("Nuki", gate, {
 		Size = Vector3.new(SPAN + 2, BEAM_THICK, UPRIGHT_THICK + 0.2),
 		Position = Vector3.new(CX, UPRIGHT_HEIGHT - 4, CZ),
@@ -262,7 +260,6 @@ local function buildToriiGate(folder: Folder)
 		Color = Color3.fromRGB(40, 28, 28),
 	})
 
-	-- Kasagi (curved-ish top crossbeam)
 	part("Kasagi", gate, {
 		Size = Vector3.new(SPAN + 6, BEAM_THICK + 0.6, UPRIGHT_THICK + 0.6),
 		Position = Vector3.new(CX, UPRIGHT_HEIGHT + 0.5, CZ),
@@ -270,18 +267,15 @@ local function buildToriiGate(folder: Folder)
 		Color = Color3.fromRGB(176, 35, 35),
 	})
 
-	-- Top accent strip
 	part("KasagiAccent", gate, {
 		Size = Vector3.new(SPAN + 7, 0.4, UPRIGHT_THICK + 0.8),
 		Position = Vector3.new(CX, UPRIGHT_HEIGHT + 1.5, CZ),
 		Material = Enum.Material.Neon,
 		Color = Color3.fromRGB(250, 204, 21),
-		CastShadow = false,
 	})
 
-	-- Subtle hanging lanterns on the uprights
-	for _, side in { -1, 1 } :: { number } do
-		local hang = part("Lantern_" .. side, gate, {
+	for _, side in { -1, 1 } do
+		local hang = part("Lantern_" .. tostring(side), gate, {
 			Size = Vector3.new(1.4, 1.4, 1.4),
 			Position = Vector3.new(CX + side * SPAN / 2, UPRIGHT_HEIGHT - 5.4, CZ),
 			Material = Enum.Material.Neon,
@@ -297,13 +291,11 @@ local function buildToriiGate(folder: Folder)
 end
 
 local function buildDecorativeBlades(folder: Folder)
-	-- Two giant blades stuck in the ground, framing the torii gate.
 	local blades = Instance.new("Folder")
 	blades.Name = "Blades"
 	blades.Parent = folder
 
 	local function blade(x: number, z: number, tilt: number, accent: Color3)
-		-- Hilt
 		part("Hilt", blades, {
 			Size = Vector3.new(1.2, 4, 1.2),
 			Position = Vector3.new(x, 13, z),
@@ -311,7 +303,6 @@ local function buildDecorativeBlades(folder: Folder)
 			Material = Enum.Material.WoodPlanks,
 			Color = Color3.fromRGB(48, 28, 22),
 		})
-		-- Crossguard
 		part("Guard", blades, {
 			Size = Vector3.new(2.4, 0.4, 0.6),
 			Position = Vector3.new(x, 11, z),
@@ -319,7 +310,6 @@ local function buildDecorativeBlades(folder: Folder)
 			Material = Enum.Material.Metal,
 			Color = Color3.fromRGB(180, 168, 90),
 		})
-		-- Blade
 		part("Blade", blades, {
 			Size = Vector3.new(0.5, 16, 1.4),
 			Position = Vector3.new(x, 4.5, z),
@@ -329,14 +319,12 @@ local function buildDecorativeBlades(folder: Folder)
 			Transparency = 0.05,
 			CanCollide = false,
 		})
-		-- Glow base
 		local glowPart = part("BladeGlow", blades, {
 			Size = Vector3.new(2.4, 0.6, 2.4),
 			Position = Vector3.new(x, 0.7, z),
 			Material = Enum.Material.Neon,
 			Color = accent,
 			CanCollide = false,
-			CastShadow = false,
 		})
 		local light = Instance.new("PointLight")
 		light.Brightness = 3
@@ -350,18 +338,14 @@ local function buildDecorativeBlades(folder: Folder)
 end
 
 local function buildPetals(folder: Folder)
-	-- A single hidden anchor part that emits cherry blossom petals ambient
-	-- across the stage. ParticleEmitter "rains" them.
 	local emitter = part("PetalEmitter", folder, {
 		Size = Vector3.new(STAGE_RADIUS * 2, 1, STAGE_RADIUS * 2),
 		Position = Vector3.new(0, 60, 0),
 		Transparency = 1,
 		CanCollide = false,
-		CastShadow = false,
 	})
 	local p = Instance.new("ParticleEmitter")
 	p.Name = "Petals"
-	-- Use a small built-in soft-circle decal as a stand-in petal sprite.
 	p.Texture = "rbxasset://textures/particles/sparkles_main.dds"
 	p.Color = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 192, 203)),
@@ -384,30 +368,6 @@ local function buildPetals(folder: Folder)
 	p.Parent = emitter
 end
 
-local function buildSpawn(folder: Folder)
-	-- Spawn pad nestled just inside the torii gate.
-	local existing = Workspace:FindFirstChild("SpawnLocation")
-	if existing then
-		existing:Destroy()
-	end
-	local spawnPart = Instance.new("SpawnLocation")
-	spawnPart.Name = "SpawnLocation"
-	spawnPart.Size = Vector3.new(8, 1, 8)
-	spawnPart.Position = Vector3.new(0, 1.2, OUTER_RADIUS - 14)
-	spawnPart.Anchored = true
-	spawnPart.Material = Enum.Material.Neon
-	spawnPart.Color = Color3.fromRGB(56, 189, 248)
-	spawnPart.Transparency = 0.15
-	spawnPart.TopSurface = Enum.SurfaceType.Smooth
-	spawnPart.Parent = Workspace
-	local light = Instance.new("PointLight")
-	light.Brightness = 2.5
-	light.Range = 12
-	light.Color = Color3.fromRGB(56, 189, 248)
-	light.Parent = spawnPart
-	folder:GetMass()
-end
-
 local function configureLighting()
 	Lighting.Ambient = Color3.fromRGB(80, 86, 116)
 	Lighting.OutdoorAmbient = Color3.fromRGB(110, 110, 140)
@@ -421,71 +381,65 @@ local function configureLighting()
 	Lighting.GeographicLatitude = 32
 	Lighting.FogColor = Color3.fromRGB(78, 102, 130)
 	Lighting.FogStart = 80
-	Lighting.FogEnd = 360
+	Lighting.FogEnd = 380
 
-	-- Atmosphere
 	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
 	if not atmo then
 		atmo = Instance.new("Atmosphere")
 		atmo.Parent = Lighting
 	end
-	atmo.Density = 0.32
-	atmo.Offset = 0.1
-	atmo.Color = Color3.fromRGB(180, 188, 220)
-	atmo.Decay = Color3.fromRGB(106, 90, 156)
-	atmo.Glare = 0.3
-	atmo.Haze = 1.6
-
-	-- Sky
-	local sky = Lighting:FindFirstChildOfClass("Sky")
-	if not sky then
-		sky = Instance.new("Sky")
-		sky.Parent = Lighting
+	if atmo then
+		atmo.Density = 0.32
+		atmo.Offset = 0.1
+		atmo.Color = Color3.fromRGB(180, 188, 220)
+		atmo.Decay = Color3.fromRGB(106, 90, 156)
+		atmo.Glare = 0.3
+		atmo.Haze = 1.6
 	end
-	sky.SkyboxBk = "rbxasset://textures/sky/sky512_bk.tex"
-	sky.SkyboxDn = "rbxasset://textures/sky/sky512_dn.tex"
-	sky.SkyboxFt = "rbxasset://textures/sky/sky512_ft.tex"
-	sky.SkyboxLf = "rbxasset://textures/sky/sky512_lf.tex"
-	sky.SkyboxRt = "rbxasset://textures/sky/sky512_rt.tex"
-	sky.SkyboxUp = "rbxasset://textures/sky/sky512_up.tex"
-	sky.SunAngularSize = 6
-	sky.MoonAngularSize = 5
-	sky.StarCount = 1500
 
-	-- Bloom for that "magical sunset" feel
 	local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
 	if not bloom then
 		bloom = Instance.new("BloomEffect")
 		bloom.Parent = Lighting
 	end
-	bloom.Intensity = 0.5
-	bloom.Size = 18
-	bloom.Threshold = 0.95
-
-	-- Mild colour grading toward warm magenta/teal
-	local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
-	if not cc then
-		cc = Instance.new("ColorCorrectionEffect")
-		cc.Parent = Lighting
+	if bloom then
+		bloom.Intensity = 0.5
+		bloom.Size = 18
+		bloom.Threshold = 0.95
 	end
-	cc.Saturation = 0.1
-	cc.Contrast = 0.06
-	cc.TintColor = Color3.fromRGB(240, 230, 250)
 
-	-- Sun rays
 	local rays = Lighting:FindFirstChildOfClass("SunRaysEffect")
 	if not rays then
 		rays = Instance.new("SunRaysEffect")
 		rays.Parent = Lighting
 	end
-	rays.Intensity = 0.18
-	rays.Spread = 0.6
+	if rays then
+		rays.Intensity = 0.18
+		rays.Spread = 0.6
+	end
+
+	local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
+	if not cc then
+		cc = Instance.new("ColorCorrectionEffect")
+		cc.Parent = Lighting
+	end
+	if cc then
+		cc.Saturation = 0.1
+		cc.Contrast = 0.06
+		cc.TintColor = Color3.fromRGB(240, 230, 250)
+	end
+end
+
+local function safeStep(name: string, fn: (Folder) -> (), folder: Folder)
+	local ok, err = pcall(fn, folder)
+	if not ok then
+		warn(string.format("[RngWorld] %s failed: %s", name, tostring(err)))
+	end
 end
 
 function World.Build()
-	-- Wipe any leftover wave-based content (Mob, EnemySpawn, etc.) and our
-	-- own previous attempt.
-	for _, name in { "Baseplate", "RngStage", WORLD_NAME, "Mob", "EnemySpawn" } :: { string } do
+	-- Clean up any prior build (and leftovers from PR #1's wave-based code).
+	for _, name in { "Baseplate", "RngStage", WORLD_NAME, "Mob", "EnemySpawn" } do
 		local existing = Workspace:FindFirstChild(name)
 		if existing then
 			existing:Destroy()
@@ -496,14 +450,22 @@ function World.Build()
 	folder.Name = WORLD_NAME
 	folder.Parent = Workspace
 
-	buildBase(folder)
-	buildAltar(folder)
-	buildRarityPillars(folder)
-	buildToriiGate(folder)
-	buildDecorativeBlades(folder)
-	buildPetals(folder)
-	buildSpawn(folder)
-	configureLighting()
+	-- Bare minimum (ground + spawn) is unguarded. If this fails the place is
+	-- broken regardless and a thrown error helps surface the bug fast.
+	bareMinimum(folder)
+
+	-- Decorative steps are independent and tolerated to fail individually.
+	safeStep("Stage", buildStage, folder)
+	safeStep("Altar", buildAltar, folder)
+	safeStep("RarityPillars", buildRarityPillars, folder)
+	safeStep("ToriiGate", buildToriiGate, folder)
+	safeStep("DecorativeBlades", buildDecorativeBlades, folder)
+	safeStep("Petals", buildPetals, folder)
+
+	local ok, err = pcall(configureLighting)
+	if not ok then
+		warn(string.format("[RngWorld] Lighting config failed: %s", tostring(err)))
+	end
 end
 
 return World

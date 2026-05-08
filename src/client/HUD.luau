@@ -77,52 +77,29 @@ local function padding(parent: Instance, p: number)
 	return pad
 end
 
-local function setIcon(label: ImageLabel | ImageButton, key: string, fallbackText: TextLabel?)
-	local id = (IconIds :: any)[key]
-	if typeof(id) == "string" and id ~= "" then
-		label.Image = id
-		label.ImageTransparency = 0
-		if fallbackText then
-			fallbackText.Visible = false
-		end
-	else
-		label.Image = ""
-		label.ImageTransparency = 1
-		if fallbackText then
-			fallbackText.Visible = true
-			fallbackText.Text = (IconIds.Fallback :: any)[key] or "?"
-		end
-	end
-end
+-- We render icons as Roblox built-in unicode glyphs (TextLabel) instead of
+-- ImageLabels backed by uploaded Decal assets. Open Cloud asset uploads have
+-- proven flaky for in-experience rendering (the v1 API returns Decal asset
+-- ids that don't resolve in `ImageLabel.Image` directly, and `rbxthumb://`
+-- redirects don't always work either). Glyphs always render and tint works
+-- via TextColor3.
 
-local function makeIcon(
-	parent: Instance,
-	key: string,
-	size: number,
-	color: Color3
-): (ImageLabel, TextLabel)
+local function makeIcon(parent: Instance, key: string, size: number, color: Color3): TextLabel
 	local frame = new(parent, "Frame", {
 		BackgroundTransparency = 1,
 		Size = UDim2.fromOffset(size, size),
 	})
-	local image = new(frame, "ImageLabel", {
+	local label = new(frame, "TextLabel", {
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
-		ImageColor3 = color,
-		ScaleType = Enum.ScaleType.Fit,
-	}) :: ImageLabel
-	local fallback = new(frame, "TextLabel", {
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
-		Text = "",
+		Text = (IconIds.Fallback :: any)[key] or "?",
 		TextColor3 = color,
 		Font = Theme.Fonts.Bold,
 		TextScaled = true,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextYAlignment = Enum.TextYAlignment.Center,
 	}) :: TextLabel
-	setIcon(image, key, fallback)
-	return image, fallback
+	return label
 end
 
 local function bestRarityFromInventory(inv: { [number]: number })
@@ -308,8 +285,8 @@ function HUD:_buildStatsCard(screen: ScreenGui)
 			Size = UDim2.new(1, 0, 0, 28),
 		}) :: Frame
 
-		local image, _ = makeIcon(r, key, 22, accent)
-		image.Parent.Position = UDim2.fromOffset(0, 3)
+		local icon = makeIcon(r, key, 22, accent)
+		icon.Parent.Position = UDim2.fromOffset(0, 3)
 
 		local lbl = new(r, "TextLabel", {
 			BackgroundTransparency = 1,
@@ -483,7 +460,7 @@ function HUD:_buildSideButtons(screen: ScreenGui)
 		}) :: ImageButton
 		corner(button)
 		stroke(button, Theme.Colors.White, 1, 0.7)
-		local _, _ = makeIcon(button, key, 28, Theme.Colors.White)
+		local _ = makeIcon(button, key, 28, Theme.Colors.White)
 		button.MouseButton1Click:Connect(function()
 			self:_toggleModal(modal)
 		end)
@@ -697,7 +674,7 @@ function HUD:_buildBottomBar(screen: ScreenGui)
 	stroke(boostBanner, Theme.Colors.Yellow400, 1, 0.2)
 	padding(boostBanner, 8)
 
-	local boostIcon, _ = makeIcon(boostBanner, "Zap", 18, Theme.Colors.Yellow400)
+	local boostIcon = makeIcon(boostBanner, "Zap", 18, Theme.Colors.Yellow400)
 	boostIcon.Parent.Position = UDim2.fromOffset(0, 1)
 
 	local boostText = new(boostBanner, "TextLabel", {
